@@ -2,9 +2,7 @@ import streamlit as st
 import colorsys
 import json
 from datetime import datetime
-from fpdf import FPDF
 import math
-import io
 
 # Configuration de la page
 st.set_page_config(
@@ -83,33 +81,33 @@ def generate_palette(base_color_hex, harmony_type):
     
     if harmony_type == "Monochrome":
         # Variations de luminosité
-        palette["Tres clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(90, l + 30))))
+        palette["Très clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(90, l + 30))))
         palette["Clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(80, l + 15))))
-        palette["Fonce"] = rgb_to_hex(hsl_to_rgb((h, s, max(20, l - 15))))
-        palette["Tres fonce"] = rgb_to_hex(hsl_to_rgb((h, s, max(10, l - 30))))
+        palette["Foncé"] = rgb_to_hex(hsl_to_rgb((h, s, max(20, l - 15))))
+        palette["Très foncé"] = rgb_to_hex(hsl_to_rgb((h, s, max(10, l - 30))))
         
     elif harmony_type == "Analogique":
         # Couleurs adjacentes sur le cercle chromatique
-        palette["Analogique -30deg"] = rgb_to_hex(hsl_to_rgb(((h - 30) % 360, s, l)))
-        palette["Analogique +30deg"] = rgb_to_hex(hsl_to_rgb(((h + 30) % 360, s, l)))
-        palette["Analogique -60deg"] = rgb_to_hex(hsl_to_rgb(((h - 60) % 360, s, l)))
+        palette["Analogique -30°"] = rgb_to_hex(hsl_to_rgb(((h - 30) % 360, s, l)))
+        palette["Analogique +30°"] = rgb_to_hex(hsl_to_rgb(((h + 30) % 360, s, l)))
+        palette["Analogique -60°"] = rgb_to_hex(hsl_to_rgb(((h - 60) % 360, s, l)))
         
     elif harmony_type == "Complémentaire":
         # Couleur opposée
-        palette["Complementaire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
+        palette["Complémentaire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
         palette["Comp. claire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, min(80, l + 15))))
-        palette["Comp. foncee"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, max(20, l - 15))))
+        palette["Comp. foncée"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, max(20, l - 15))))
         
     elif harmony_type == "Triadique":
         # Trois couleurs équidistantes
-        palette["Triadique +120deg"] = rgb_to_hex(hsl_to_rgb(((h + 120) % 360, s, l)))
-        palette["Triadique +240deg"] = rgb_to_hex(hsl_to_rgb(((h + 240) % 360, s, l)))
+        palette["Triadique +120°"] = rgb_to_hex(hsl_to_rgb(((h + 120) % 360, s, l)))
+        palette["Triadique +240°"] = rgb_to_hex(hsl_to_rgb(((h + 240) % 360, s, l)))
         
     elif harmony_type == "Tétradique":
         # Quatre couleurs en rectangle
-        palette["Tetradique +90deg"] = rgb_to_hex(hsl_to_rgb(((h + 90) % 360, s, l)))
-        palette["Tetradique +180deg"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
-        palette["Tetradique +270deg"] = rgb_to_hex(hsl_to_rgb(((h + 270) % 360, s, l)))
+        palette["Tétradique +90°"] = rgb_to_hex(hsl_to_rgb(((h + 90) % 360, s, l)))
+        palette["Tétradique +180°"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
+        palette["Tétradique +270°"] = rgb_to_hex(hsl_to_rgb(((h + 270) % 360, s, l)))
     
     return palette
 
@@ -222,80 +220,6 @@ def export_to_figma_variables(palette, palette_name):
             }
         }
     return json.dumps({"variables": variables}, indent=2)
-
-def generate_pdf(palette, palette_name, include_contrast=True, include_shades=True):
-    """Génère un PDF avec la palette"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 20)
-    
-    # Titre (encode to latin-1 compatible)
-    safe_palette_name = palette_name.encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 10, safe_palette_name, ln=True, align="C")
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 5, f"Genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')}", ln=True, align="C")
-    pdf.ln(10)
-    
-    # Couleurs principales
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 8, "Palette principale", ln=True)
-    pdf.ln(2)
-    
-    y_position = pdf.get_y()
-    for i, (name, color) in enumerate(palette.items()):
-        if i > 0 and i % 3 == 0:
-            y_position += 35
-            pdf.set_y(y_position)
-        
-        x_position = 10 + (i % 3) * 65
-        pdf.set_xy(x_position, y_position)
-        
-        # Rectangle de couleur
-        rgb = hex_to_rgb(color)
-        pdf.set_fill_color(rgb[0], rgb[1], rgb[2])
-        pdf.rect(x_position, y_position, 60, 25, "F")
-        
-        # Nom et codes (remove accents for PDF compatibility)
-        safe_name = name.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
-        pdf.set_xy(x_position, y_position + 26)
-        pdf.set_font("Arial", "B", 9)
-        pdf.cell(60, 4, safe_name, align="C")
-        pdf.set_xy(x_position, y_position + 30)
-        pdf.set_font("Arial", "", 8)
-        pdf.cell(60, 3, color.upper(), align="C")
-    
-    # Matrice de contraste
-    if include_contrast and len(palette) >= 2:
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 8, "Matrice de contraste WCAG", ln=True)
-        pdf.ln(2)
-        pdf.set_font("Arial", "", 9)
-        
-        colors_list = list(palette.items())
-        for i, (name1, color1) in enumerate(colors_list):
-            for j, (name2, color2) in enumerate(colors_list):
-                if i < j:
-                    rgb1 = hex_to_rgb(color1)
-                    rgb2 = hex_to_rgb(color2)
-                    ratio = calculate_contrast_ratio(rgb1, rgb2)
-                    level, icon = get_wcag_level(ratio)
-                    
-                    # Remove accents from names
-                    safe_name1 = name1.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
-                    safe_name2 = name2.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
-                    safe_level = level.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
-                    
-                    pdf.cell(0, 6, f"{icon} {safe_name1} / {safe_name2}: {ratio:.2f}:1 - {safe_level}", ln=True)
-    
-    # Use BytesIO to avoid encoding issues
-    pdf_output = io.BytesIO()
-    pdf_string = pdf.output(dest='S')
-    if isinstance(pdf_string, str):
-        pdf_output.write(pdf_string.encode('latin-1', 'replace'))
-    else:
-        pdf_output.write(pdf_string)
-    return pdf_output.getvalue()
 
 # ============================================================================
 # INTERFACE STREAMLIT
@@ -498,25 +422,9 @@ with tabs[3]:
         # Options d'export
         st.subheader("📥 Exporter votre palette")
         
-        export_cols = st.columns(3)
+        export_cols = st.columns(2)
         
         with export_cols[0]:
-            # Export PDF
-            pdf_bytes = generate_pdf(
-                st.session_state.saved_palette,
-                st.session_state.palette_name,
-                include_contrast=True,
-                include_shades=True
-            )
-            st.download_button(
-                label="📄 Télécharger PDF",
-                data=pdf_bytes,
-                file_name=f"{st.session_state.palette_name.replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        
-        with export_cols[1]:
             # Export Figma Styles
             figma_styles_json = export_to_figma_styles(
                 st.session_state.saved_palette,
@@ -530,7 +438,7 @@ with tabs[3]:
                 use_container_width=True
             )
         
-        with export_cols[2]:
+        with export_cols[1]:
             # Export Figma Variables
             figma_vars_json = export_to_figma_variables(
                 st.session_state.saved_palette,
@@ -649,7 +557,7 @@ with st.sidebar:
     1. **Générateur de palettes** - Créez des harmonies automatiques
     2. **Vérificateur de contraste** - Assurez l'accessibilité WCAG
     3. **Générateur de nuances** - Échelles pour design systems
-    4. **Explorateur & Export** - PDF + Figma + CSS
+    4. **Explorateur & Export** - Figma + CSS
     5. **Harmoniseur** - Analysez vos palettes
     
     ---
@@ -664,7 +572,6 @@ with st.sidebar:
     ---
     
     **Formats d'export:**
-    - 📄 PDF avec aperçus visuels
     - 🎨 JSON Figma Styles
     - 🔷 JSON Figma Variables
     - 💅 CSS Variables
