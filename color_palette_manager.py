@@ -200,39 +200,82 @@ def analyze_harmony(colors):
 # EXPORTS
 # ============================================================================
 
-def export_to_figma_styles(palette, palette_name):
-    """Exporte au format JSON compatible avec les plugins Figma Style"""
-    styles = []
-    for name, color in palette.items():
-        rgb = hex_to_rgb(color)
-        styles.append({
-            "name": f"{palette_name}/{name}",
-            "type": "color",
-            "value": {
-                "r": rgb[0] / 255,
-                "g": rgb[1] / 255,
-                "b": rgb[2] / 255,
-                "a": 1
-            }
-        })
-    return json.dumps({"styles": styles}, indent=2)
-
 def export_to_figma_variables(palette, palette_name):
-    """Exporte au format JSON compatible avec Figma Variables"""
-    variables = {}
+    """Exporte au format JSON compatible avec Figma Variables (collections)"""
+    
+    # Organiser les couleurs par groupes (base colors vs shades)
+    color_groups = {}
+    
     for name, color in palette.items():
-        rgb = hex_to_rgb(color)
-        variable_name = f"{palette_name}/{name}".replace(" ", "-").lower()
-        variables[variable_name] = {
-            "type": "color",
-            "value": {
-                "r": rgb[0] / 255,
-                "g": rgb[1] / 255,
-                "b": rgb[2] / 255,
-                "a": 1
+        # Déterminer le groupe et le niveau
+        if "★ BASE" in name:
+            # Extraire le nom du groupe depuis le contexte ou utiliser un nom par défaut
+            base_name = name.replace("★ BASE", "").strip()
+            if not base_name or base_name.startswith("("):
+                base_name = "Primary"
+            if base_name not in color_groups:
+                color_groups[base_name] = {}
+            color_groups[base_name]["500"] = color  # BASE au milieu (500)
+        elif "Nuance" in name:
+            # Extraire le numéro de nuance
+            parts = name.split(" ")
+            if len(parts) >= 2:
+                nuance_num = parts[1]
+                try:
+                    num = int(nuance_num)
+                    # Mapper les nuances à des valeurs de 50 à 950
+                    # Les nuances 1-4 sont claires (50-400)
+                    # La base est 500
+                    # Les nuances 6-9 sont foncées (600-900)
+                    if num <= 4:
+                        level = str(50 + (num - 1) * 100)
+                    else:
+                        level = str(500 + (num - 4) * 100)
+                    
+                    group_name = "Primary"
+                    if group_name not in color_groups:
+                        color_groups[group_name] = {}
+                    color_groups[group_name][level] = color
+                except ValueError:
+                    pass
+        else:
+            # Autres couleurs (harmonies, etc.)
+            clean_name = name.replace(" ", "-").replace("°", "deg").replace("é", "e").replace("è", "e")
+            if clean_name not in color_groups:
+                color_groups[clean_name] = {}
+            color_groups[clean_name]["500"] = color
+    
+    # Si aucun groupe n'a été créé, créer un groupe par défaut avec toutes les couleurs
+    if not color_groups:
+        color_groups["Colors"] = {}
+        for idx, (name, color) in enumerate(palette.items()):
+            level = str((idx + 1) * 100)
+            color_groups["Colors"][level] = color
+    
+    # Construire la structure de variables
+    variables = {}
+    for group_name, levels in color_groups.items():
+        variables[group_name] = {}
+        for level, color in levels.items():
+            variables[group_name][level] = {
+                "type": "color",
+                "values": {
+                    "Default": color.upper()
+                }
             }
-        }
-    return json.dumps({"variables": variables}, indent=2)
+    
+    # Structure finale
+    figma_data = {
+        "collections": [
+            {
+                "name": palette_name,
+                "modes": ["Default"],
+                "variables": variables
+            }
+        ]
+    }
+    
+    return json.dumps(figma_data, indent=2)
 
 # ============================================================================
 # INTERFACE STREAMLIT
@@ -438,46 +481,28 @@ with tabs[3]:
         # Options d'export
         st.subheader("📥 Exporter votre palette")
         
-        export_cols = st.columns(2)
+        export_cols = st.columns(3)
         
         with export_cols[0]:
-            # Export Figma Styles
-            figma_styles_json = export_to_figma_styles(
-                st.session_state.saved_palette,
-                st.session_state.palette_name
-            )
-            st.download_button(
-                label="🎨 Figma Styles JSON",
-                data=figma_styles_json,
-                file_name=f"{st.session_state.palette_name.replace(' ', '_')}_styles.json",
-                mime="application/json",
-                use_container_width=True
-            )
-        
-        with export_cols[1]:
             # Export Figma Variables
             figma_vars_json = export_to_figma_variables(
                 st.session_state.saved_palette,
                 st.session_state.palette_name
             )
             st.download_button(
-                label="🔷 Figma Variables JSON",
+                label="🎨 Figma Variables JSON",
                 data=figma_vars_json,
-                file_name=f"{st.session_state.palette_name.replace(' ', '_')}_variables.json",
+                file_name=f"{st.session_state.palette_name.replace(' ', '_')}_figma.json",
                 mime="application/json",
                 use_container_width=True
             )
         
-        # Autres formats
-        st.markdown("### Autres formats")
-        
-        other_cols = st.columns(2)
-        
-        with other_cols[0]:
+        with export_cols[1]:
+        with export_cols[1]:
             # CSS Variables
             css_vars = ":root {\n"
             for name, color in st.session_state.saved_palette.items():
-                var_name = name.replace(" ", "-").lower()
+                var_name = name.replace(" ", "-").replace("★", "").replace("°", "deg").lower()
                 css_vars += f"  --{var_name}: {color};\n"
             css_vars += "}"
             
@@ -489,7 +514,7 @@ with tabs[3]:
                 use_container_width=True
             )
         
-        with other_cols[1]:
+        with export_cols[2]:
             # JSON simple
             simple_json = json.dumps(st.session_state.saved_palette, indent=2)
             st.download_button(
@@ -588,10 +613,15 @@ with st.sidebar:
     ---
     
     **Formats d'export:**
-    - 🎨 JSON Figma Styles
-    - 🔷 JSON Figma Variables
+    - 🎨 Figma Variables (Collections)
     - 💅 CSS Variables
     - 📋 JSON simple
+    
+    **Import dans Figma:**
+    - Téléchargez le JSON Figma Variables
+    - Dans Figma: Ouvrez les Variables locales
+    - Cliquez sur l'icône ⋯ → Import variables
+    - Sélectionnez votre fichier JSON
     """)
     
     st.markdown("---")
