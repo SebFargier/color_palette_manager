@@ -201,21 +201,41 @@ def analyze_harmony(colors):
 # ============================================================================
 
 def export_to_figma_variables(palette, palette_name):
-    """Exporte au format JSON compatible avec Figma Variables (collections)"""
+    """Exporte au format JSON compatible avec Figma Variables (format Design Tokens)"""
     
-    # Organiser les couleurs par groupes (base colors vs shades)
+    # Structure principale
+    figma_tokens = {
+        "color": {},
+        "$extensions": {
+            "com.figma.modeName": "Default"
+        }
+    }
+    
+    # Organiser les couleurs par groupes
     color_groups = {}
     
     for name, color in palette.items():
-        # Déterminer le groupe et le niveau
+        # Convertir HEX en RGB normalisé (0-1)
+        rgb = hex_to_rgb(color)
+        components = [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255]
+        
+        # Déterminer le groupe et le sous-groupe
         if "★ BASE" in name:
-            # Extraire le nom du groupe depuis le contexte ou utiliser un nom par défaut
-            base_name = name.replace("★ BASE", "").strip()
-            if not base_name or base_name.startswith("("):
-                base_name = "Primary"
-            if base_name not in color_groups:
-                color_groups[base_name] = {}
-            color_groups[base_name]["500"] = color  # BASE au milieu (500)
+            # Couleur de base -> primary
+            if "palette" not in color_groups:
+                color_groups["palette"] = {}
+            color_groups["palette"]["primary"] = {
+                "$type": "color",
+                "$value": {
+                    "colorSpace": "srgb",
+                    "components": components,
+                    "alpha": 1,
+                    "hex": color.upper()
+                },
+                "$extensions": {
+                    "com.figma.scopes": ["ALL_SCOPES"]
+                }
+            }
         elif "Nuance" in name:
             # Extraire le numéro de nuance
             parts = name.split(" ")
@@ -223,59 +243,96 @@ def export_to_figma_variables(palette, palette_name):
                 nuance_num = parts[1]
                 try:
                     num = int(nuance_num)
-                    # Mapper les nuances à des valeurs de 50 à 950
-                    # Les nuances 1-4 sont claires (50-400)
-                    # La base est 500
-                    # Les nuances 6-9 sont foncées (600-900)
+                    # Mapper les nuances
                     if num <= 4:
-                        level = str(50 + (num - 1) * 100)
+                        shade_level = f"shade-{num}"
                     else:
-                        level = str(500 + (num - 4) * 100)
+                        shade_level = f"shade-{num}"
                     
-                    group_name = "Primary"
-                    if group_name not in color_groups:
-                        color_groups[group_name] = {}
-                    color_groups[group_name][level] = color
+                    if "palette" not in color_groups:
+                        color_groups["palette"] = {}
+                    
+                    color_groups["palette"][shade_level] = {
+                        "$type": "color",
+                        "$value": {
+                            "colorSpace": "srgb",
+                            "components": components,
+                            "alpha": 1,
+                            "hex": color.upper()
+                        },
+                        "$extensions": {
+                            "com.figma.scopes": ["ALL_SCOPES"]
+                        }
+                    }
                 except ValueError:
                     pass
         else:
             # Autres couleurs (harmonies, etc.)
-            clean_name = name.replace(" ", "-").replace("°", "deg").replace("é", "e").replace("è", "e")
-            if clean_name not in color_groups:
-                color_groups[clean_name] = {}
-            color_groups[clean_name]["500"] = color
-    
-    # Si aucun groupe n'a été créé, créer un groupe par défaut avec toutes les couleurs
-    if not color_groups:
-        color_groups["Colors"] = {}
-        for idx, (name, color) in enumerate(palette.items()):
-            level = str((idx + 1) * 100)
-            color_groups["Colors"][level] = color
-    
-    # Construire la structure de variables
-    variables = {}
-    for group_name, levels in color_groups.items():
-        variables[group_name] = {}
-        for level, color in levels.items():
-            variables[group_name][level] = {
-                "type": "color",
-                "values": {
-                    "Default": color.upper()
+            # Nettoyer le nom pour créer un groupe
+            clean_name = name.lower().replace(" ", "-").replace("°", "deg").replace("é", "e").replace("è", "e").replace("ê", "e")
+            
+            # Créer une hiérarchie : groupe / sous-groupe
+            if "complementaire" in clean_name or "comp" in clean_name:
+                group = "complementary"
+            elif "analogique" in clean_name:
+                group = "analogous"
+            elif "triadique" in clean_name:
+                group = "triadic"
+            elif "tetradique" in clean_name:
+                group = "tetradic"
+            elif "clair" in clean_name:
+                group = "tints"
+            elif "fonce" in clean_name:
+                group = "shades"
+            else:
+                group = "base"
+            
+            if group not in color_groups:
+                color_groups[group] = {}
+            
+            # Utiliser le nom nettoyé comme clé
+            sub_key = clean_name.replace(group + "-", "").replace("-", "_")
+            if not sub_key:
+                sub_key = "primary"
+            
+            color_groups[group][sub_key] = {
+                "$type": "color",
+                "$value": {
+                    "colorSpace": "srgb",
+                    "components": components,
+                    "alpha": 1,
+                    "hex": color.upper()
+                },
+                "$extensions": {
+                    "com.figma.scopes": ["ALL_SCOPES"]
                 }
             }
     
-    # Structure finale
-    figma_data = {
-        "collections": [
-            {
-                "name": palette_name,
-                "modes": ["Default"],
-                "variables": variables
+    # Si aucun groupe n'a été créé, créer un groupe par défaut
+    if not color_groups:
+        color_groups["palette"] = {}
+        for idx, (name, color) in enumerate(palette.items()):
+            rgb = hex_to_rgb(color)
+            components = [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255]
+            clean_name = name.lower().replace(" ", "_").replace("°", "deg")
+            
+            color_groups["palette"][clean_name] = {
+                "$type": "color",
+                "$value": {
+                    "colorSpace": "srgb",
+                    "components": components,
+                    "alpha": 1,
+                    "hex": color.upper()
+                },
+                "$extensions": {
+                    "com.figma.scopes": ["ALL_SCOPES"]
+                }
             }
-        ]
-    }
     
-    return json.dumps(figma_data, indent=2)
+    # Assigner les groupes à la structure principale
+    figma_tokens["color"] = color_groups
+    
+    return json.dumps(figma_tokens, indent=2)
 
 # ============================================================================
 # INTERFACE STREAMLIT
