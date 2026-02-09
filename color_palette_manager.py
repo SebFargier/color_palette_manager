@@ -116,16 +116,29 @@ def generate_palette(base_color_hex, harmony_type):
 # ============================================================================
 
 def generate_shades(base_color_hex, num_shades=9):
-    """Génère une échelle de nuances d'une couleur"""
+    """Génère une échelle de nuances d'une couleur avec la couleur de base au centre"""
     rgb = hex_to_rgb(base_color_hex)
     h, s, l = rgb_to_hsl(rgb)
     
     shades = {}
-    step = 100 / (num_shades + 1)
     
-    for i in range(num_shades):
-        lightness = int(95 - (i * step))
+    # Calculer le nombre de nuances au-dessus et en-dessous
+    num_lighter = num_shades // 2
+    num_darker = num_shades - num_lighter - 1  # -1 pour la couleur de base
+    
+    # Générer les nuances plus claires
+    for i in range(num_lighter):
+        lightness = int(l + (95 - l) * (num_lighter - i) / (num_lighter + 1))
         shade_name = f"Nuance {i+1} ({lightness}%)"
+        shades[shade_name] = rgb_to_hex(hsl_to_rgb((h, s, lightness)))
+    
+    # Ajouter la couleur de base au milieu
+    shades[f"★ BASE ({l}%)"] = base_color_hex
+    
+    # Générer les nuances plus foncées
+    for i in range(num_darker):
+        lightness = int(l - (l - 5) * (i + 1) / (num_darker + 1))
+        shade_name = f"Nuance {num_lighter + i + 2} ({lightness}%)"
         shades[shade_name] = rgb_to_hex(hsl_to_rgb((h, s, lightness)))
     
     return shades
@@ -371,14 +384,17 @@ with tabs[2]:
         
         # Affichage en barre dégradée
         for name, color in shades.items():
+            is_base = "★ BASE" in name
+            border_style = "border: 3px solid #FFD700;" if is_base else "border: 1px solid #ddd;"
+            
             st.markdown(
                 f"""
                 <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                    <div style="background-color: {color}; width: 70%; height: 40px; 
-                                border-radius: 4px; margin-right: 15px; border: 1px solid #ddd;">
+                    <div style="background-color: {color}; width: 70%; height: 50px; 
+                                border-radius: 4px; margin-right: 15px; {border_style}">
                     </div>
                     <div style="width: 30%;">
-                        <strong>{name.split('(')[0]}</strong><br>
+                        <strong style="{'color: #FFD700;' if is_base else ''}">{name.split('(')[0]}</strong><br>
                         <span style="color: #666; font-size: 0.9em;">{color.upper()}</span>
                     </div>
                 </div>
