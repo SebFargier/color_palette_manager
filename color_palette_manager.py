@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from fpdf import FPDF
 import math
+import io
 
 # Configuration de la page
 st.set_page_config(
@@ -82,33 +83,33 @@ def generate_palette(base_color_hex, harmony_type):
     
     if harmony_type == "Monochrome":
         # Variations de luminosité
-        palette["Très clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(90, l + 30))))
+        palette["Tres clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(90, l + 30))))
         palette["Clair"] = rgb_to_hex(hsl_to_rgb((h, s, min(80, l + 15))))
-        palette["Foncé"] = rgb_to_hex(hsl_to_rgb((h, s, max(20, l - 15))))
-        palette["Très foncé"] = rgb_to_hex(hsl_to_rgb((h, s, max(10, l - 30))))
+        palette["Fonce"] = rgb_to_hex(hsl_to_rgb((h, s, max(20, l - 15))))
+        palette["Tres fonce"] = rgb_to_hex(hsl_to_rgb((h, s, max(10, l - 30))))
         
     elif harmony_type == "Analogique":
         # Couleurs adjacentes sur le cercle chromatique
-        palette["Analogique -30°"] = rgb_to_hex(hsl_to_rgb(((h - 30) % 360, s, l)))
-        palette["Analogique +30°"] = rgb_to_hex(hsl_to_rgb(((h + 30) % 360, s, l)))
-        palette["Analogique -60°"] = rgb_to_hex(hsl_to_rgb(((h - 60) % 360, s, l)))
+        palette["Analogique -30deg"] = rgb_to_hex(hsl_to_rgb(((h - 30) % 360, s, l)))
+        palette["Analogique +30deg"] = rgb_to_hex(hsl_to_rgb(((h + 30) % 360, s, l)))
+        palette["Analogique -60deg"] = rgb_to_hex(hsl_to_rgb(((h - 60) % 360, s, l)))
         
     elif harmony_type == "Complémentaire":
         # Couleur opposée
-        palette["Complémentaire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
+        palette["Complementaire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
         palette["Comp. claire"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, min(80, l + 15))))
-        palette["Comp. foncée"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, max(20, l - 15))))
+        palette["Comp. foncee"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, max(20, l - 15))))
         
     elif harmony_type == "Triadique":
         # Trois couleurs équidistantes
-        palette["Triadique +120°"] = rgb_to_hex(hsl_to_rgb(((h + 120) % 360, s, l)))
-        palette["Triadique +240°"] = rgb_to_hex(hsl_to_rgb(((h + 240) % 360, s, l)))
+        palette["Triadique +120deg"] = rgb_to_hex(hsl_to_rgb(((h + 120) % 360, s, l)))
+        palette["Triadique +240deg"] = rgb_to_hex(hsl_to_rgb(((h + 240) % 360, s, l)))
         
     elif harmony_type == "Tétradique":
         # Quatre couleurs en rectangle
-        palette["Tétradique +90°"] = rgb_to_hex(hsl_to_rgb(((h + 90) % 360, s, l)))
-        palette["Tétradique +180°"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
-        palette["Tétradique +270°"] = rgb_to_hex(hsl_to_rgb(((h + 270) % 360, s, l)))
+        palette["Tetradique +90deg"] = rgb_to_hex(hsl_to_rgb(((h + 90) % 360, s, l)))
+        palette["Tetradique +180deg"] = rgb_to_hex(hsl_to_rgb(((h + 180) % 360, s, l)))
+        palette["Tetradique +270deg"] = rgb_to_hex(hsl_to_rgb(((h + 270) % 360, s, l)))
     
     return palette
 
@@ -228,10 +229,11 @@ def generate_pdf(palette, palette_name, include_contrast=True, include_shades=Tr
     pdf.add_page()
     pdf.set_font("Arial", "B", 20)
     
-    # Titre
-    pdf.cell(0, 10, palette_name, ln=True, align="C")
+    # Titre (encode to latin-1 compatible)
+    safe_palette_name = palette_name.encode('latin-1', 'replace').decode('latin-1')
+    pdf.cell(0, 10, safe_palette_name, ln=True, align="C")
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 5, f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}", ln=True, align="C")
+    pdf.cell(0, 5, f"Genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')}", ln=True, align="C")
     pdf.ln(10)
     
     # Couleurs principales
@@ -253,10 +255,11 @@ def generate_pdf(palette, palette_name, include_contrast=True, include_shades=Tr
         pdf.set_fill_color(rgb[0], rgb[1], rgb[2])
         pdf.rect(x_position, y_position, 60, 25, "F")
         
-        # Nom et codes
+        # Nom et codes (remove accents for PDF compatibility)
+        safe_name = name.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
         pdf.set_xy(x_position, y_position + 26)
         pdf.set_font("Arial", "B", 9)
-        pdf.cell(60, 4, name, align="C")
+        pdf.cell(60, 4, safe_name, align="C")
         pdf.set_xy(x_position, y_position + 30)
         pdf.set_font("Arial", "", 8)
         pdf.cell(60, 3, color.upper(), align="C")
@@ -278,9 +281,21 @@ def generate_pdf(palette, palette_name, include_contrast=True, include_shades=Tr
                     ratio = calculate_contrast_ratio(rgb1, rgb2)
                     level, icon = get_wcag_level(ratio)
                     
-                    pdf.cell(0, 6, f"{icon} {name1} / {name2}: {ratio:.2f}:1 - {level}", ln=True)
+                    # Remove accents from names
+                    safe_name1 = name1.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
+                    safe_name2 = name2.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
+                    safe_level = level.replace('è', 'e').replace('é', 'e').replace('à', 'a').replace('ù', 'u')
+                    
+                    pdf.cell(0, 6, f"{icon} {safe_name1} / {safe_name2}: {ratio:.2f}:1 - {safe_level}", ln=True)
     
-    return pdf.output(dest='S').encode('latin-1')
+    # Use BytesIO to avoid encoding issues
+    pdf_output = io.BytesIO()
+    pdf_string = pdf.output(dest='S')
+    if isinstance(pdf_string, str):
+        pdf_output.write(pdf_string.encode('latin-1', 'replace'))
+    else:
+        pdf_output.write(pdf_string)
+    return pdf_output.getvalue()
 
 # ============================================================================
 # INTERFACE STREAMLIT
