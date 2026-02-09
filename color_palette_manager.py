@@ -498,7 +498,6 @@ with tabs[3]:
             )
         
         with export_cols[1]:
-        with export_cols[1]:
             # CSS Variables
             css_vars = ":root {\n"
             for name, color in st.session_state.saved_palette.items():
